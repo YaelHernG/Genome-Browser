@@ -1,0 +1,315 @@
+---
+title: "Visualization Practice"
+author: "Paola Albarrán Godoy, Ariadna Badia Zamudio, Yael Daniel Hernandez Gonzalez"
+date: "`r Sys.Date()`"
+output: 
+  html_document: # El output controla los parámetros de salida del renderizado
+    collapsed: false            # Contraer celdas de salida
+    code_folding: show          # Mostrar el código
+    toc: true                   # Mostrar la tabla de contenidos
+    toc_depth: 4                # Niveles de títulos que se mostrarán
+    toc_float: true             # Índices o contenidos flotantes
+    smooth_scroll: true         # Activar el scroll
+    highlight: kate             # Destacar
+    df_print: paged             # Mostrar los dataframes en páginas
+    number_sections: true       # Numeración de contenidos
+    theme: flatly 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Visualization of RNA-seq data in IGV of P. chabaudi
+
+## Data Loading in IGV
+
+First we upload the files PccAS_v3_genome.fa and PccAS_v3.gff3 to our local repository. Using the following command.
+
+```         
+scp yhernandezg@dna.lavis.unam.mx:/mnt/atgc-d1/bioinfoII/data/IGV/PccAS_v3*  /home/yael/2025-2/Bioinformatica/Visualizacion_Practice/
+```
+
+Then, we load our IGV program from terminal, where we have the executable file of igv.sh . In this case it is the following path:
+
+```         
+cd ~/Escritorio/IGV/IGV_Linux_2.19.1_WithJava/IGV_Linux_2.19.1/
+```
+
+Here we are going to run the program like this
+
+```         
+./igv.sh
+```
+
+This opens the IGV executable where we will load the files previously uploaded to our local repository. Inside IGV in "Genomes" \> "Load Genome from File" select the genome file (PccAS_v3_genome.fa), then load the annotation file (PccAS_v3.gff3) in "File" \> "Load from File". The browser will show us genes, exons and introns in the selected region and bars representing the RNA coverage. bars representing the RNA-seq coverage.
+
+![](images/igv1-02.png)
+
+**Questions**
+
+Which one is the annotation file?
+
+The annotation file is in GFF (General Feature Format) or GTF (Gene Transfer Format) format. These formats describe genome features such as genes, exons, introns, coding regions, etc.
+
+In the context of IGV, this file is loaded to visualize genomic features (e.g., gene locations) along with RNA-seq data.
+
+What is this format describing?
+
+The annotation format (GFF or GTF) describes genomic features, such as:
+
+-   Genes: location of genes in the genome.
+
+-   Exons and introns: Structure of genes.
+
+-   Coding regions (CDS): Parts of the genome that code for proteins.
+
+-   Other features: such as untranslated regions (UTRs), transcription start and termination sites, etc.
+
+This format allows IGV to display genomic annotations visually, overlaid with RNA-seq data.
+
+What is the browser displaying?
+
+The IGV browser shows:
+
+-   Plasmodium chabaudi AS genome at the top, with genomic coordinates.
+
+-   The genomic annotations (genes, exons, etc.) as bars or blocks below the genome.
+
+-   The RNA-seq data (aligned reads) as traces or coverage bars, indicating the number of reads that align to each region of the genome.
+
+What happens if you zoom in or out?
+
+Zoom in:
+
+By zooming in, you see more details of the RNA-seq reads and genomic annotations you see the individual reads aligned to the genome, as well as the exact structure of the genes (exons, introns, etc.).
+
+RNA-seq coverage is displayed at higher resolution, allowing differences in gene expression to be seen at the nucleotide level.
+
+Zoom out:
+
+By zooming out, a more general view of the genome is seen.
+
+The annotations and RNA-seq coverage are grouped together, showing overall gene expression trends in broader regions.
+
+## HISAT2 Data Alignment
+
+To align our paired-ends reads from the MT1 and MT2 RNA-seq experiments, we first indexed our *Plasmodium chabaudi* reference genome, using hisat, and the following commands:
+
+```         
+module load hisat2/2.2.1
+hisat2-build /mnt/atgc-d1/bioinfoII/data/IGV/PccAS_v3_genome.fa PccAS_v3_hisat2.idx .
+```
+
+Questions
+
+Is the data in the correct format?
+
+No, we have fastq
+
+What kind of data do you need?
+
+We need bam format, preferably to display it sorted and indexed.
+
+Why are there two files per sample?
+
+RNA-seq data can be generated in two main formats: single-end (reads from a single end) and paired-end (reads from both ends of a cDNA fragment).
+
+-   Single-end reads: Each RNA fragment is sequenced in a single direction, generating a single FASTQ file per sample.
+
+-   Paired-end reads: Each RNA fragment is sequenced in both directions (forward and reverse), generating two FASTQ files per sample (one for each end of the fragment).
+
+In this analysis, the data are paired-end, which means that we have two FASTQ files per sample:
+
+-   MT1_1.fastq contains the forward end reads.
+
+-   MT1_2.fastq contains the reverse end reads.
+
+This allows for more accurate alignment, as the information from both ends helps to resolve repetitive regions and improve exon splicing detection.
+
+Now to align the RNA-seq reads of the samples the following commands were used:
+
+```         
+#For MT1 reads
+
+hisat2 --max-intronlen 10000 -x PccAS_v3_hisat2.idx  -1 /mnt/atgc-d1/bioinfoII/data/IGV/MT1_1.fastq   -2 /mnt/atgc-d1/bioinfoII/data/IGV/MT1_2.fastq    -S MT1.sam
+
+#For MT2 reads
+
+hisat2 --max-intronlen 10000 -x PccAS_v3_hisat2.idx -1 /mnt/atgc-d1/bioinfoII/data/IGV/MT2_1.fastq -2  /mnt/atgc-d1/bioinfoII/data/IGV/MT2_2.fastq -S MT2.sam
+```
+
+Where:
+
+-   \--max-intronlen 10000: Specifies the maximum intron length (10,000 bp in this case).
+
+-   -x PccAS_v3_hisat2.idx: Specifies the genome index.
+
+-   -1 MT1_1.fastq: FASTQ file with readings from end 1 of the MT1 sample.
+
+-   -2 MT1_2.fastq: FASTQ file with the readings of end 2 of the MT1 sample.
+
+-   -S MT1.sam: Output file in SAM format.
+
+After alignment, the SAM file must be converted to BAM, sorted and indexed, with the following command lines
+
+```         
+module load samtools/1.10
+
+#Convert SAM to BAM
+samtools view -bS MT1.sam > MT1.bam
+samtools view -bS MT2.sam > MT2.bam
+
+#Sorted the BAM files
+samtools sort MT1.bam -o MT1_sorted.bam
+samtools sort MT2.bam -o MT2_sorted.bam
+
+#Index the sorted BAM files
+samtools index MT1_sorted.bam
+samtools index MT2_sorted.bam
+```
+
+Once this is done, we can use the aligned reads to visualize our reads in IGV.
+
+## Display in IGV
+
+Now we need to download the `sorted.bam` and `sorted.bam.bai` files to our local repository with the following commands, outside the cluster
+
+```         
+scp yhernandezg@dna.lavis.unam.mx:/mnt/atgc-d1/bioinfoII/yhernandezg/GenomeBrowser/MT1_sorted.bam /home/yael/2025-2/Bioinformatica/Visualizacion_Practice/
+
+scp yhernandezg@dna.lavis.unam.mx:/mnt/atgc-d1/bioinfoII/yhernandezg/GenomeBrowser/MT1_sorted.bam.bai /home/yael/2025-2/Bioinformatica/Visualizacion_Practice/
+```
+
+Then load the `MT1_sorted.bam` and `MT2_sorted.bam` files in IGV, by clicking on the "File" tab \> "Load from File".
+
+Questions
+
+What do you see, explore the genome.
+
+![](images/igv_genomebrowser.jpeg)
+
+Visualize loci: PCHAS_0505200 and PCHAS_1409500, What do you see?
+
+![](images/PCHAS_0505200%20.png)
+
+PCHAS_0505200
+
+-   The heading indicates that we are looking at chromosome 5, version 3 of the Plasmodium chabaudi genome.
+
+-   The coordinates 201,776-204,011 specify the locus region, which spans 2,292 base pairs.
+
+-   "Coverage" tracks show the number of RNA-seq reads that align to each position in the genome.Higher areas indicate regions with higher coverage, suggesting higher gene expression or transcriptional activity.
+
+-   Blue arcs represent splicing junctions (exons). Each arc connects two exons that are separated by an intron, indicating that the RNA has been processed and introns have been removed.
+
+-   The "Read Coverage" tracks show the individual RNA-seq reads aligned to the genome.Each gray bar represents a read, and its height indicates the number of reads covering that position.
+
+-   The "Locus" track shows the location of specific genetic elements or features at the locus.Vertical bars can represent genes, exons, UTRs, transcription start sites, etc.
+
+-   The "Sequence" track shows the DNA nucleotide sequence in the region of the locus. Each letter represents a base (A, T, G, C).
+
+![](images/PCHAS_1409500.png)
+
+PCHAS_1409500
+
+-   The heading indicates that we are looking at chromosome 5, version 3 of the *Plasmodium chabaudi* genome.
+
+-   The coordinates 75,000-76,517 specify the locus region, which spans 1,517 base pairs. "Coverage" tracks show the number of RNA-seq reads that align to each position in the genome.
+
+-   Higher areas indicate regions with higher coverage, suggesting higher gene expression or transcriptional activity.
+
+-   Red arcs represent splicing junctions (exons). Each arc connects two exons that are separated by an intron, indicating that the RNA has been processed and introns have been removed.
+
+-   The "Read Coverage" tracks show the individual RNA-seq reads aligned to the genome. Each gray bar represents a read, and its height indicates the number of reads covering that position.
+
+-   The "Sequence" track shows the DNA nucleotide sequence in the region of the locus. Each letter represents a base (A, T, G, C).
+
+Can you export the figure?
+
+Yes, by clicking on the "File" tab \> "Save PNG image".
+
+# Visualization of the ChIP-seq mouse alignment
+
+## Display in IGV
+
+Previously we aligned the reads of ChIP-seq experiment from liver set of genes in mouse. Now we visualize the reads in IGV; it's important to mention that the reads were subjected to trimming where 93% of the data was removed, then the remaining 7% only mapped 78% of the reads, so we actually worked with 5.5% of the original data.
+
+Then, we load our alignment reads in our local repository, by the next command
+
+```         
+scp yhernandezg@dna.lavis.unam.mx:/mnt/atgc-d1/bioinfoII/yhernandezg/AlignmentPractical/mouse_alignment/trimming_alignment/mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bam /home/yael/2025-2/Bioinformatica/Visualizacion_Practice/
+
+scp yhernandezg@dna.lavis.unam.mx:/mnt/atgc-d1/bioinfoII/yhernandezg/AlignmentPractical/mouse_alignment/trimming_alignment/mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bam.bai /home/yael/2025-2/Bioinformatica/Visualizacion_Practice/
+```
+
+Now, we can load the bam files in IGV for the visualization. Load the `mus_musculus_CEBPA_liver_ERR005132_trimmed.bam` files in IGV, by clicking on the "File" tab \> "Load from File".
+
+We were able to identify two promoter regulatory zones of genes related to liver functionality. The following images correspond to positions chr1:74,894,812-74,895,731, which is located at the Hnf4a gene, which regulates hepatic differentiation and lipid and glucose metabolism; and chr2:147,656,338-147,657,194, which is located at the Foxa2 promoter, which regulates glucose, lipid and detoxification genes.
+
+![](images/igv_chr1.png)
+
+![](images/igv_chr2.png)
+
+## UCSC Genome Browser
+
+Since the aligned ChIP-seq data are in BAM format, they need to be converted to BigWig for viewing in UCSC Genome Browser.
+
+Questions
+
+How can you upload the data?
+
+1.  Host the file online (you can use CyVerse, Google Drive, Dropbox or institutional servers).
+
+2.  Copy the direct URL of your BAM or BigWig file.
+
+3.  Open UCSC Genome Browser → Go to "My Data" → "Custom Tracks" → Paste the URL.
+
+4.  Click "Submit" to display the data.
+
+• Bam: They allow viewing of individual alignments, but require an index file (.bai).
+
+• Bigwig: They represent the coverage of the readings in a compressed form and are more efficient for display in UCSC.
+
+What is BigWig? Is a binary format optimized for storing coverage information in sequencing experiments.
+
+To generate a BigWig format from an aligned BAM file, we use deepTools with the following command:
+
+```         
+module load deeptools/2.5.3
+
+bamCoverage -b mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bam -o mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bw --binSize 50 --normalizeTo1x 2150000000
+```
+
+Where:
+
+-b mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bam → Input BAM file (must be indexed with .bai).
+
+-o mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bw → Output BigWig file.
+
+\--binSize 50 → Window size in base pairs (50 bp). Adjusts the resolution of the BigWig file.
+
+\--normalizeTo1x 2150000000 → Normalizes coverage to 1x for a genome of approximately 2.15 Gb (mouse genome length).
+
+Now in cyverse, we upload our files by going to "CyVerse Discovery Environment." in your cyverse account, then click on "data", and click on "upload" and upload the bam, bam.bai and bw files.
+
+Let's make the files public and enter [UCSC's web page](https://genome.ucsc.edu/cgi-bin/hgCustom)
+
+Inside the page, we go to "My data" \> "Custom Tracks" where we will add 2 custom tracks as follows, and give submit to each of them
+
+```         
+track name=mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bw bigDataUrl=https://data.cyverse.org/dav-anon/iplant/home/yaelherng/mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bw type=bigWig
+
+
+track type=bam name="Mouse_bam" bigDataUrl=https://data.cyverse.org/dav-anon/iplant/home/yaelherng/mus_musculus_CEBPA_liver_ERR005132_trimmed.sorted.bam
+```
+
+Then click on "Go to first annotation" and the visualization is displayed.
+
+We are looking for the zones we saw in IGV, chr2:147,656,338-147,657,194 and the promoter cepba. They are shown in the following images
+
+![](images/ucsc_chr2.png)
+
+![](images/ucsc_cepba.png)
+
+Visualization of RNA-seq and ChIP-seq data in IGV allowed us to identify regions of high coverage that suggest significant transcriptional activity in key genes such as Hnf4a and Foxa2. This highlights the utility of tools such as IGV and UCSC Genome Browser for exploring gene regulation in different biological contexts. Future research could include the integration of these data with epigenetic or transcriptomic information for a more comprehensive analysis.
